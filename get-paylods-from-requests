@@ -25,42 +25,28 @@ def choose_project_id():
     return options[choice - 1]
 
 
-def run_gcloud_command(conditions, project_id):
+def build_gcloud_command(conditions, project_id):
     query = " AND ".join(conditions)
     if not any("timestamp>=" in cond for cond in conditions):
         last_hour_timestamp = (datetime.utcnow() - timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
         query += f' AND timestamp>="{last_hour_timestamp}"'
 
     command = [
-        'gcloud', 'logging', 'read', query,
+        'gcloud', 'logging', 'read', f"'{query}'",
         '--format=json',
         f'--project={project_id}'
     ]
 
-    result = subprocess.run(command, capture_output=True, text=True)
+    return " ".join(command)
+
+
+def run_gcloud_command(command):
+    result = subprocess.run(command, shell=True, capture_output=True, text=True)
     if result.returncode != 0:
         print(f"Error: {result.stderr}")
         sys.exit(1)
 
     return json.loads(result.stdout)
-
-
-def fetch_debug_log(log, project_id):
-    timestamp = log['timestamp']
-    path = urlparse(log['httpRequest']['requestUrl']).path
-    debug_log = run_gcloud_command([
-        f'resource.labels.service_name="job-board-application-api"',
-        f'labels.path="{path}"',
-        f'severity="DEBUG"',
-        f'timestamp>="{timestamp}"'
-    ], project_id)
-
-    if debug_log:
-        return {
-            "status": log['httpRequest']['status'],
-            "payload": debug_log[0].get('jsonPayload', {}).get('body', '')
-        }
-    return None
 
 
 def main():
@@ -73,16 +59,16 @@ def main():
             break
         conditions.append(line.strip())
 
-    logs = run_gcloud_command(conditions, project_id)
-    filtered_logs = [log for log in logs if log['httpRequest']['status'] != 201]
-    final_output = []
+    final_command = build_gcloud_command(conditions, project_id)
+    print(f"Final gcloud command:\n{final_command}")
+    confirm = input("Do you want to proceed? (yes/no): ").strip().lower()
 
-    with ThreadPoolExecutor() as executor:
-        results = list(executor.map(lambda log: fetch_debug_log(log, project_id), filtered_logs))
+    if confirm != "yes":
+        print("Exiting.")
+        sys.exit(0)
 
-    final_output = [result for result in results if result is not None]
-
-    print(json.dumps(final_output, indent=4))
+    logs = run_gcloud_command(final_command)
+    print(json.dumps(logs, indent=4))
 
 
 if __name__ == '__main__':
