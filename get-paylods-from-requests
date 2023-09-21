@@ -91,7 +91,9 @@ def main():
         conditions.append(line.strip())
 
     final_command = build_gcloud_command(conditions, project_id)
-    formatted_final_command = " ".join(final_command)
+    query_formatted = final_command[3].replace(" AND ", " AND\n").replace(" OR ", " OR\n")
+    options_formatted = " \\\n".join(final_command[4:])
+    formatted_final_command = f"gcloud logging read '{query_formatted}' \\\n{options_formatted}"
     print(f"Final gcloud command:\n{formatted_final_command}")
     confirm = input("Do you want to proceed? (yes/no): ").strip().lower()
 
