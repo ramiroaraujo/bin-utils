@@ -8,6 +8,23 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 
 
+def choose_project_id():
+    options = [
+        "ff-app-prod",
+        "ff-app-dev",
+        "ff-app-iso-1",
+        "ff-app-iso-2",
+        "ff-app-iso-3",
+        "ff-app-iso-4"
+    ]
+    print("Choose a Project ID:")
+    for i, option in enumerate(options):
+        print(f"{i + 1}. {option}")
+
+    choice = int(input("Enter the number corresponding to your choice: ").strip())
+    return options[choice - 1]
+
+
 def run_gcloud_command(conditions, project_id):
     query = " AND ".join(conditions)
     if not any("timestamp>=" in cond for cond in conditions):
@@ -47,7 +64,7 @@ def fetch_debug_log(log, project_id):
 
 
 def main():
-    project_id = input("Enter Project ID: ").strip()
+    project_id = choose_project_id()
     conditions = []
     print("Enter conditions (empty line to finish):")
     while True:
