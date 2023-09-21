@@ -27,7 +27,7 @@ def choose_project_id():
 
 def build_gcloud_command(conditions, project_id):
     query = " AND ".join(conditions)
-    if not any("timestamp>=" in cond for cond in conditions):
+    if not any("timestamp" in cond for cond in conditions):
         last_hour_timestamp = (datetime.utcnow() - timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
         query += f' AND timestamp>="{last_hour_timestamp}"'
 
