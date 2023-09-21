@@ -1,0 +1,61 @@
+#!/usr/bin/env python3
+
+import sys
+import json
+import subprocess
+from urllib.parse import urlparse
+from concurrent.futures import ThreadPoolExecutor
+
+
+def read_json_file(filename):
+    with open(filename, 'r') as f:
+        return json.load(f)
+
+
+def run_gcloud_command(timestamp, path):
+    query = (
+        f'resource.labels.service_name="job-board-application-api" AND '
+        f'labels.path="{path}" AND '
+        f'severity="DEBUG" AND '
+        f'timestamp>="{timestamp}"'
+    )
+
+    command = [
+        'gcloud', 'logging', 'read', query,
+        '--order=asc',
+        '--limit=1',
+        '--format=json',
+        '--project=ff-app-prod'
+    ]
+
+    result = subprocess.run(command, capture_output=True, text=True)
+    return json.loads(result.stdout)[0] if result.stdout else None
+
+
+def fetch_debug_log(log):
+    timestamp = log['timestamp']
+    path = urlparse(log['httpRequest']['requestUrl']).path
+    debug_log = run_gcloud_command(timestamp, path)
+    if debug_log:
+        return {
+            "status": log['httpRequest']['status'],
+            "payload": debug_log.get('jsonPayload', {}).get('body', '')
+        }
+    return None
+
+
+def main():
+    filename = sys.argv[1]
+    logs = read_json_file(filename)
+    final_output = []
+
+    with ThreadPoolExecutor() as executor:
+        results = list(executor.map(fetch_debug_log, logs))
+
+    final_output = [result for result in results if result is not None]
+
+    print(json.dumps(final_output, indent=4))
+
+
+if __name__ == '__main__':
+    main()
