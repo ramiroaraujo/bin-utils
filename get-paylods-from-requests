@@ -29,8 +29,9 @@ def build_gcloud_command(conditions, project_id):
         last_hour_timestamp = (datetime.utcnow() - timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
         query += f' AND timestamp>="{last_hour_timestamp}"'
 
+    formatted_query = query.replace(" AND ", "\nAND ")
     return (
-        f"gcloud logging read '{query}' "
+        f"gcloud logging read '{formatted_query}' "
         f"--format=json "
         f"--project={project_id}"
     )
