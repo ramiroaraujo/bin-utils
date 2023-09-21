@@ -5,52 +5,63 @@ import json
 import subprocess
 from urllib.parse import urlparse
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta
 
 
-def read_json_file(filename):
-    with open(filename, 'r') as f:
-        return json.load(f)
-
-
-def run_gcloud_command(timestamp, path):
-    query = (
-        f'resource.labels.service_name="job-board-application-api" AND '
-        f'labels.path="{path}" AND '
-        f'severity="DEBUG" AND '
-        f'timestamp>="{timestamp}"'
-    )
+def run_gcloud_command(conditions, project_id):
+    query = " AND ".join(conditions)
+    if not any("timestamp>=" in cond for cond in conditions):
+        last_hour_timestamp = (datetime.utcnow() - timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+        query += f' AND timestamp>="{last_hour_timestamp}"'
 
     command = [
         'gcloud', 'logging', 'read', query,
-        '--order=asc',
-        '--limit=1',
         '--format=json',
-        '--project=ff-app-prod'
+        f'--project={project_id}'
     ]
 
     result = subprocess.run(command, capture_output=True, text=True)
-    return json.loads(result.stdout)[0] if result.stdout else None
+    if result.returncode != 0:
+        print(f"Error: {result.stderr}")
+        sys.exit(1)
+
+    return json.loads(result.stdout)
 
 
-def fetch_debug_log(log):
+def fetch_debug_log(log, project_id):
     timestamp = log['timestamp']
     path = urlparse(log['httpRequest']['requestUrl']).path
-    debug_log = run_gcloud_command(timestamp, path)
+    debug_log = run_gcloud_command([
+        f'resource.labels.service_name="job-board-application-api"',
+        f'labels.path="{path}"',
+        f'severity="DEBUG"',
+        f'timestamp>="{timestamp}"'
+    ], project_id)
+
     if debug_log:
         return {
             "status": log['httpRequest']['status'],
-            "payload": debug_log.get('jsonPayload', {}).get('body', '')
+            "payload": debug_log[0].get('jsonPayload', {}).get('body', '')
         }
     return None
 
 
 def main():
-    filename = sys.argv[1]
-    logs = read_json_file(filename)
+    project_id = input("Enter Project ID: ").strip()
+    conditions = []
+    print("Enter conditions (empty line to finish):")
+    while True:
+        line = input()
+        if line == '':
+            break
+        conditions.append(line.strip())
+
+    logs = run_gcloud_command(conditions, project_id)
+    filtered_logs = [log for log in logs if log['httpRequest']['status'] != 201]
     final_output = []
 
     with ThreadPoolExecutor() as executor:
-        results = list(executor.map(fetch_debug_log, logs))
+        results = list(executor.map(lambda log: fetch_debug_log(log, project_id), filtered_logs))
 
     final_output = [result for result in results if result is not None]
 
