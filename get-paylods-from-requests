@@ -3,8 +3,6 @@
 import sys
 import json
 import subprocess
-from urllib.parse import urlparse
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 
 
@@ -31,13 +29,11 @@ def build_gcloud_command(conditions, project_id):
         last_hour_timestamp = (datetime.utcnow() - timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
         query += f' AND timestamp>="{last_hour_timestamp}"'
 
-    command = [
-        'gcloud', 'logging', 'read', f"'{query}'",
-        '--format=json',
-        f'--project={project_id}'
-    ]
-
-    return " ".join(command)
+    return (
+        f"gcloud logging read '{query}' "
+        f"--format=json "
+        f"--project={project_id}"
+    )
 
 
 def run_gcloud_command(command):
@@ -56,6 +52,9 @@ def main():
     while True:
         line = input()
         if line == '':
+            if not conditions:
+                print("At least one condition must be entered. Exiting.")
+                sys.exit(1)
             break
         conditions.append(line.strip())
 
@@ -68,6 +67,13 @@ def main():
         sys.exit(0)
 
     logs = run_gcloud_command(final_command)
+    if len(logs) > 20:
+        print("Warning: More than 20 records were returned.")
+        confirm = input("Do you want to proceed? (yes/no): ").strip().lower()
+        if confirm != "yes":
+            print("Exiting.")
+            sys.exit(0)
+
     print(json.dumps(logs, indent=4))
 
 
