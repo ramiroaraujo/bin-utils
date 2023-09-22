@@ -86,6 +86,12 @@ def fetch_debug_log(log, project_id):
 
 
 def main():
+    if len(sys.argv) < 2:
+        print("Usage: script.py <output_file>")
+        sys.exit(1)
+
+    output_file_path = sys.argv[1]
+
     project_id = choose_project_id()
     conditions = []
     print("Enter conditions (empty line to finish):")
@@ -121,7 +127,8 @@ def main():
         results = list(executor.map(lambda log: fetch_debug_log(log, project_id), logs))
 
     final_output = [result for result in results if result is not None]
-    print(json.dumps(final_output, indent=4))
+    with open(output_file_path, 'w') as f:
+        json.dump(final_output, f, indent=4)
 
 
 if __name__ == '__main__':
