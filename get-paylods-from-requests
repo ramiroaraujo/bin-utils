@@ -51,30 +51,38 @@ def run_gcloud_command(command):
 
 
 def fetch_debug_log(log, project_id):
-    timestamp = log['timestamp']
-    path = urlparse(log['httpRequest']['requestUrl']).path
-    query = (
-        f'resource.labels.service_name="job-board-application-api" AND '
-        f'labels.path="{path}" AND '
-        f'severity="DEBUG" AND '
-        f'timestamp>="{timestamp}"'
-    )
-    command = [
-        'gcloud', 'logging', 'read', query,
-        '--order=asc',
-        '--limit=1',
-        '--format=json',
-        '--project=' + project_id
-    ]
-    result = subprocess.run(command, capture_output=True, text=True)
-    debug_log = json.loads(result.stdout)[0] if result.stdout else None
-
-    if debug_log:
-        return {
-            "status": log['httpRequest']['status'],
-            "payload": debug_log.get('jsonPayload', {}).get('body', '')
-        }
-    return None
+    try:
+        timestamp = log['timestamp']
+        path = urlparse(log['httpRequest']['requestUrl']).path
+        query = (
+            f'resource.labels.service_name="job-board-application-api" AND '
+            f'labels.path="{path}" AND '
+            f'severity="DEBUG" AND '
+            f'timestamp>="{timestamp}"'
+        )
+        command = [
+            'gcloud', 'logging', 'read', query,
+            '--order=asc',
+            '--limit=1',
+            '--format=json',
+            '--project=' + project_id
+        ]
+        result = subprocess.run(command, capture_output=True, text=True)
+        loaded_json = json.loads(result.stdout)
+        if not loaded_json:
+            print(f"No debug logs found for timestamp: {timestamp}, path: {path}")
+            return None
+        debug_log = loaded_json[0]
+        if debug_log:
+            return {
+                "status": log['httpRequest']['status'],
+                "payload": debug_log.get('jsonPayload', {}).get('body', '')
+            }
+        return None
+    except Exception as e:
+        print(f"Error fetching debug log for timestamp: {timestamp}, path: {path}")
+        print(f"Exception: {e}")
+        return None
 
 
 def main():
