@@ -111,7 +111,7 @@ def main():
 
     logs = run_gcloud_command(final_command)
     if len(logs) > 20:
-        print("Warning: More than 20 records were returned.")
+        print(f"Warning: {len(logs)} records were returned.")
         confirm = input("Do you want to proceed? (yes/no): ").strip().lower()
         if confirm != "yes":
             print("Exiting.")
