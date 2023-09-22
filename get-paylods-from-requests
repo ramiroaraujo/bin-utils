@@ -6,6 +6,7 @@ import subprocess
 from datetime import datetime, timedelta
 from urllib.parse import urlparse
 from concurrent.futures import ThreadPoolExecutor
+from itertools import islice
 
 
 def choose_project_id():
@@ -33,7 +34,6 @@ def build_gcloud_command(conditions, project_id):
         last_hour_timestamp = (datetime.utcnow() - timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
         query += f' AND timestamp>="{last_hour_timestamp}"'
 
-    formatted_query = query.replace(" AND ", "\nAND ")
     return [
         'gcloud', 'logging', 'read', query,
         '--format=json',
@@ -85,6 +85,15 @@ def fetch_debug_log(log, project_id):
         return None
 
 
+def chunk_it(data, chunk_size):
+    it = iter(data)
+    while True:
+        chunk = tuple(islice(it, chunk_size))
+        if not chunk:
+            return
+        yield chunk
+
+
 def main():
     if len(sys.argv) < 2:
         print("Usage: script.py <output_file>")
@@ -123,12 +132,16 @@ def main():
             print("Exiting.")
             sys.exit(0)
 
-    with ThreadPoolExecutor() as executor:
-        results = list(executor.map(lambda log: fetch_debug_log(log, project_id), logs))
+    output = []
+    for i in range(0, len(logs), 100):
+        chunk = logs[i:i + 100]
+        with ThreadPoolExecutor() as executor:
+            results = list(executor.map(lambda log: fetch_debug_log(log, project_id), chunk))
 
-    final_output = [result for result in results if result is not None]
-    with open(output_file_path, 'w') as f:
-        json.dump(final_output, f, indent=4)
+        output.extend([result for result in results if result is not None])
+
+    with open(output_file_path, "w") as f:
+        json.dump(output, f, indent=4)
 
 
 if __name__ == '__main__':
