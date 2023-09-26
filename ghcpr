@@ -7,8 +7,9 @@ current_branch = subprocess.getoutput("git symbolic-ref --short HEAD")
 
 # Construct the title from the branch name
 parts = current_branch.split("/")
-ticket = parts[1].split("-")[0].upper()
-description = " ".join(parts[1].split("-")[1:]).replace("-", " ").title()
+ticket_parts = parts[1].split("-")
+ticket = "-".join(ticket_parts[:2]).upper()
+description = " ".join(ticket_parts[2:]).replace("-", " ").title()
 
 generated_title = f"{ticket} {description}"
 
