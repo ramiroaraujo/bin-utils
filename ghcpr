@@ -5,10 +5,10 @@ current_branch=$(git symbolic-ref --short HEAD)
 
 # Construct the title from the branch name
 IFS='/' read -ra PARTS <<< "$current_branch"
-ticket=${PARTS[1]%%-*}
+ticket=$(echo ${PARTS[1]%%-*} | tr 'a-z' 'A-Z')
 description=$(echo ${PARTS[1]#*-} | tr '-' ' ' | awk '{ for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1)) tolower(substr($i,2)); } 1')
 
-generatedTitle="$ticket ${description^}"
+generatedTitle="${ticket}-$description"
 
 # Execute the GitHub CLI command to create a PR
 gh pr create --web --title "$generatedTitle"
