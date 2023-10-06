@@ -59,7 +59,10 @@ with open(tmpfile.name, 'r') as f:
 os.remove(tmpfile.name)
 
 # Initialize the git filter-branch command text
-filter_branch_script = 'git filter-branch --env-filter \\\n'
+filter_branch_script = 'FILTER_BRANCH_SQUELCH_WARNING=1 git filter-branch --env-filter \\\n'
+
+# Initialize
+filter_branch_conditions = []
 
 # Parse the edited content
 for line in edited_content.strip().split("\n"):
@@ -71,17 +74,16 @@ for line in edited_content.strip().split("\n"):
         dt_obj = datetime.datetime.strptime(potentially_modified_date, "%a %b %d %H:%M:%S %Y")
         timestamp = int(dt_obj.timestamp())
 
-        # Append the conditions and exports for this commit to the filter-branch script
-        filter_branch_script += f"if test \"$GIT_COMMIT\" = \"{commit_hash_full}\"; then\n"
-        filter_branch_script += f"    export GIT_AUTHOR_DATE=\"{timestamp}\"\n"
-        filter_branch_script += f"    export GIT_COMMITTER_DATE=\"{timestamp}\"\n"
-        filter_branch_script += "elif "
+        # Create a condition block for this commit
+        condition_block = f'test "$GIT_COMMIT" = "{commit_hash_full}"; then \n    export GIT_AUTHOR_DATE="{timestamp}" \n    export GIT_COMMITTER_DATE="{timestamp}"'
+        filter_branch_conditions.append(condition_block)
 
-# Remove the trailing 'elif '
-filter_branch_script = filter_branch_script[:-5]
+# Join condition blocks with 'elif'
+joined_conditions = " \nelif ".join(filter_branch_conditions)
 
-# Append the closing part and cleanup command
-earliest_commit = log_entries[-1].split("*#")[0]  # Assuming log_entries are in reverse order
+# Complete the git filter-branch command
+filter_branch_script += "'if " + joined_conditions + " \nfi' "
+earliest_commit = log_entries[-1].split("*#")[0][:7]  # Assuming log_entries are in reverse order
 filter_branch_script += f"{earliest_commit}^..HEAD && rm -fr \"$(git rev-parse --git-dir)/refs/original/\""
 
 # Print the generated git filter-branch command
