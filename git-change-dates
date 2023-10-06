@@ -35,8 +35,8 @@ editor_content += "# You can edit the dates on each line. When you save and clos
 for entry in log_entries:
     parts = entry.split("*#")
     commit_hash = parts[0]
-    hash_map[commit_hash[:7]] = commit_hash  # Map short hash to full hash
-    timestamp = parts[3]
+    timestamp = int(parts[3])
+    hash_map[commit_hash[:7]] = {'full_hash': commit_hash, 'original_timestamp': timestamp}
     date = datetime.datetime.fromtimestamp(int(timestamp)).strftime("%a %b %d %H:%M:%S %Y %z")
     commit_msg = parts[4]
     editor_content += f"{commit_hash[:7]} - {date} - {commit_msg}\n"
@@ -51,7 +51,7 @@ with tempfile.NamedTemporaryFile(mode='w+', delete=False) as tmpfile:
 # Open in default editor
 os.system(f"{editor} {tmpfile.name}")
 
-# Read the edited content back
+c# Read the edited content back
 with open(tmpfile.name, 'r') as f:
     edited_content = f.read()
 
@@ -68,15 +68,23 @@ filter_branch_conditions = []
 for line in edited_content.strip().split("\n"):
     if not line.startswith("#"):
         parts = line.split(" - ")
-        commit_hash_full = hash_map.get(parts[0], parts[0])  # Map back to full hash
+        short_hash = parts[0]
+        commit_info = hash_map.get(short_hash, {})
         potentially_modified_date = parts[1].strip()
+
         # Convert the potentially modified date to a Unix timestamp
         dt_obj = datetime.datetime.strptime(potentially_modified_date, "%a %b %d %H:%M:%S %Y")
-        timestamp = int(dt_obj.timestamp())
+        new_timestamp = int(dt_obj.timestamp())
 
-        # Create a condition block for this commit
-        condition_block = f'test "$GIT_COMMIT" = "{commit_hash_full}"; then \n    export GIT_AUTHOR_DATE="{timestamp}" \n    export GIT_COMMITTER_DATE="{timestamp}"'
-        filter_branch_conditions.append(condition_block)
+        # Check if the timestamp has changed
+        if new_timestamp != commit_info['original_timestamp']:
+            condition_block = f'test "$GIT_COMMIT" = "{commit_info["full_hash"]}"; then \n    export GIT_AUTHOR_DATE="{new_timestamp}" \n    export GIT_COMMITTER_DATE="{new_timestamp}"'
+            filter_branch_conditions.append(condition_block)
+
+# Check if filter_branch_conditions is empty
+if not filter_branch_conditions:
+    print("No dates were changed. Exiting.")
+    exit(0)
 
 # Join condition blocks with 'elif'
 joined_conditions = " \nelif ".join(filter_branch_conditions)
