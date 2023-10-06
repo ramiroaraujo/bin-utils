@@ -3,10 +3,12 @@ import subprocess
 import argparse
 import os
 import datetime
+import tempfile
 
 # Check for git repository
 try:
-    subprocess.run(["git", "rev-parse", "--is-inside-work-tree"], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    subprocess.run(["git", "rev-parse", "--is-inside-work-tree"], check=True, stdout=subprocess.PIPE,
+                   stderr=subprocess.PIPE)
 except subprocess.CalledProcessError:
     print("Not a git repository. Exiting.")
     exit(1)
@@ -37,4 +39,26 @@ for entry in log_entries:
 
 # Open in default editor
 editor = os.environ.get("EDITOR", "vim")
-subprocess.run([editor, "-c", f"set ft=gitcommit | set syntax=gitcommit", "-"], input=editor_content, text=True)
+
+# Create a temporary file
+with tempfile.NamedTemporaryFile(mode='w+', delete=False) as tmpfile:
+    tmpfile.write(editor_content)
+
+# Open in default editor
+os.system(f"{editor} {tmpfile.name}")
+
+# Read the edited content back
+with open(tmpfile.name, 'r') as f:
+    edited_content = f.read()
+
+# Remove the temporary file
+os.remove(tmpfile.name)
+
+# Parse the edited content
+for line in edited_content.strip().split("\n"):
+    if not line.startswith("#"):
+        parts = line.split(" - ")
+        commit_hash_full = parts[0]
+        original_date = parts[1]
+        potentially_modified_date = parts[1]  # Here, we assume the date is potentially modified
+        print(f"Commit: {commit_hash_full}, Original Date: {original_date}, Modified Date: {potentially_modified_date}")
