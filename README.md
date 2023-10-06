@@ -1,4 +1,4 @@
 # Scripts for tooling
 
-## Mostly in Python (GPT) or Bash
+Mostly python scripts or bash scripts
 
