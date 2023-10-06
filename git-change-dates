@@ -1,49 +1,76 @@
-#!/bin/bash
+#!/usr/bin/env python3
+
+import subprocess
+import tempfile
+import os
 
 # Check if in a Git repository
-if ! git rev-parse --is-inside-work-tree > /dev/null 2>&1; then
-    echo "Not in a Git repository. Exiting."
-    exit 1
-fi
+try:
+    subprocess.check_output(['git', 'rev-parse', '--is-inside-work-tree'], stderr=subprocess.STDOUT)
+except subprocess.CalledProcessError:
+    print("Not in a Git repository. Exiting.")
+    exit(1)
 
 # Process command line options
-while [[ "$#" -gt 0 ]]; do
-    case $1 in
-        --count) COUNT="$2"; shift ;;
-        *) echo "Unknown parameter passed: $1"; exit 1 ;;
-    esac
-    shift
-done
+COUNT = None
+import sys
+
+args = sys.argv[1:]
+i = 0
+while i < len(args):
+    if args[i] == "--count":
+        COUNT = args[i+1]
+        i += 1
+    else:
+        print(f"Unknown parameter passed: {args[i]}")
+        exit(1)
+    i += 1
 
 # Get commit hashes and dates, and store them in a variable
-COMMITS=$(git log --abbrev-commit --pretty="format:%h - %cd" -n "$COUNT")
+COMMITS = subprocess.check_output(['git', 'log', '--abbrev-commit', '--pretty=format:%h - %cd', '-n', COUNT]).decode()
 
 # Add comments at the beginning of the string
-COMMITS="# This string contains the commit hashes and dates for the last $COUNT commits.\n# You can edit the dates on each line. When you save and close this file, the commit dates will be updated.\n$COMMITS"
+COMMITS = f"# This string contains the commit hashes and dates for the last {COUNT} commits.\n" \
+          f"# You can edit the dates on each line. When you save and close this file, the commit dates will be updated.\n{COMMITS}"
 
 # Generate a temporary file
-TMPFILE=$(mktemp /tmp/commits.XXXXXX)
-
-# Write commits to the temporary file
-echo -e "$COMMITS" > "$TMPFILE"
+with tempfile.NamedTemporaryFile(prefix='commits.', delete=False) as TMPFILE:
+    TMPFILE_NAME = TMPFILE.name
+    TMPFILE.write(COMMITS.encode())
 
 # Open the file in the editor
-${EDITOR:-nano} "$TMPFILE"
+EDITOR = os.environ.get('EDITOR', 'nano')
+subprocess.run([EDITOR, TMPFILE_NAME])
 
 # Read updated commits from the temporary file
-UPDATED_COMMITS=$(cat "$TMPFILE")
+with open(TMPFILE_NAME, 'r') as file:
+    UPDATED_COMMITS = file.read()
 
-# Update commit dates
-while IFS=" - " read -r hash date; do
-    # Ignore lines starting with '#'
-    [[ "$hash" =~ ^#.*$ ]] && continue
+# Construct the filter-branch command
+filter_branch_cmd = ["git", "filter-branch", "--env-filter"]
 
-    # Update commit date
-    git filter-repo --force --commit-callback '
-        if commit.original_id == "'"$hash"'":
-            commit.committer_date = "'"$date"'"
-            commit.author_date = "'"$date"'"
-    '
-done < <(echo "$UPDATED_COMMITS")
+env_filter = ""
+for line in UPDATED_COMMITS.splitlines():
+    if line.startswith("#"):
+        continue
 
-echo "Commit dates updated."
+    hash, date = line.split(" - ")
+    env_filter += f'''
+if test "$GIT_COMMIT" = "{hash}"; then
+    export GIT_AUTHOR_DATE="{date}"
+    export GIT_COMMITTER_DATE="{date}"
+fi
+'''
+
+filter_branch_cmd.append(env_filter)
+
+last_commit = UPDATED_COMMITS.splitlines()[0].split(" - ")[0]
+filter_branch_cmd.extend([f"{last_commit}^..HEAD"])
+
+# Execute the filter-branch command
+subprocess.run(filter_branch_cmd)
+
+# Clean up refs
+subprocess.run(['rm', '-fr', f'$(git rev-parse --git-dir)/refs/original/'])
+
+print("Commit dates updated.")
