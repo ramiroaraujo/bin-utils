@@ -51,7 +51,7 @@ with tempfile.NamedTemporaryFile(mode='w+', delete=False) as tmpfile:
 # Open in default editor
 os.system(f"{editor} {tmpfile.name}")
 
-c# Read the edited content back
+# Read the edited content back
 with open(tmpfile.name, 'r') as f:
     edited_content = f.read()
 
