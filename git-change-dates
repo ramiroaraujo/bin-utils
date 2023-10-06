@@ -18,6 +18,9 @@ parser = argparse.ArgumentParser(description="Change git commit dates.")
 parser.add_argument('--count', type=int, required=True, help='Number of log entries to fetch.')
 args = parser.parse_args()
 
+# Create a dictionary to map short hash to full hash
+hash_map = {}
+
 # Fetch N last git log entries using the updated command
 log_entries = subprocess.run(
     ["git", "log", f"--pretty=format:%H*#%an*#%ae*#%at*#%s", f"-n{args.count}"],
@@ -32,6 +35,7 @@ editor_content += "# You can edit the dates on each line. When you save and clos
 for entry in log_entries:
     parts = entry.split("*#")
     commit_hash = parts[0]
+    hash_map[commit_hash[:7]] = commit_hash  # Map short hash to full hash
     timestamp = parts[3]
     date = datetime.datetime.fromtimestamp(int(timestamp)).strftime("%a %b %d %H:%M:%S %Y %z")
     commit_msg = parts[4]
@@ -54,11 +58,31 @@ with open(tmpfile.name, 'r') as f:
 # Remove the temporary file
 os.remove(tmpfile.name)
 
+# Initialize the git filter-branch command text
+filter_branch_script = 'git filter-branch --env-filter \\\n'
+
 # Parse the edited content
 for line in edited_content.strip().split("\n"):
     if not line.startswith("#"):
         parts = line.split(" - ")
-        commit_hash_full = parts[0]
-        original_date = parts[1]
-        potentially_modified_date = parts[1]  # Here, we assume the date is potentially modified
-        print(f"Commit: {commit_hash_full}, Original Date: {original_date}, Modified Date: {potentially_modified_date}")
+        commit_hash_full = hash_map.get(parts[0], parts[0])  # Map back to full hash
+        potentially_modified_date = parts[1].strip()
+        # Convert the potentially modified date to a Unix timestamp
+        dt_obj = datetime.datetime.strptime(potentially_modified_date, "%a %b %d %H:%M:%S %Y")
+        timestamp = int(dt_obj.timestamp())
+
+        # Append the conditions and exports for this commit to the filter-branch script
+        filter_branch_script += f"if test \"$GIT_COMMIT\" = \"{commit_hash_full}\"; then\n"
+        filter_branch_script += f"    export GIT_AUTHOR_DATE=\"{timestamp}\"\n"
+        filter_branch_script += f"    export GIT_COMMITTER_DATE=\"{timestamp}\"\n"
+        filter_branch_script += "elif "
+
+# Remove the trailing 'elif '
+filter_branch_script = filter_branch_script[:-5]
+
+# Append the closing part and cleanup command
+earliest_commit = log_entries[-1].split("*#")[0]  # Assuming log_entries are in reverse order
+filter_branch_script += f"{earliest_commit}^..HEAD && rm -fr \"$(git rev-parse --git-dir)/refs/original/\""
+
+# Print the generated git filter-branch command
+print(filter_branch_script)
