@@ -8,7 +8,7 @@ def make_request(payload):
     headers = {
         'Content-Type': "application/json",
         'User-Agent': "insomnia/2023.5.8",
-        'X-LINKEDIN-API-Key': "4f4a38e7-20c4-4b7e-8d1f-3bbcc318450a"
+        'X-LINKEDIN-API-Key': "4f4a38E7-20c4-4b7e-8d1f-3bbcf318450a"
     }
 
     conn.request("POST", "/external/linkedin", json.dumps(payload), headers)
