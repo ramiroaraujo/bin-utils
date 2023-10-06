@@ -15,9 +15,9 @@ parser = argparse.ArgumentParser(description="Change git commit dates.")
 parser.add_argument('--count', type=int, required=True, help='Number of log entries to fetch.')
 args = parser.parse_args()
 
-# Fetch N last git log entries
+# Fetch N last git log entries using the updated command
 log_entries = subprocess.run(
-    ["git", "log", f"--pretty=format:%h*#%an*#%ae*#%at*#%s", f"-n{args.count}"],
+    ["git", "log", f"--pretty=format:%H*#%an*#%ae*#%at*#%s", f"-n{args.count}"],
     stdout=subprocess.PIPE,
     text=True
 ).stdout.split("\n")
@@ -29,13 +29,14 @@ editor_content += "# You can edit the dates on each line. When you save and clos
 for entry in log_entries:
     parts = entry.split("*#")
     commit_hash = parts[0]
+    timestamp = parts[3]
     date = subprocess.run(
-        ["date", "-d", f"@{parts[3]}", "+%a %b %d %H:%M:%S %Y %z"],
+        ["date", "-d", f"@{timestamp}", "+%a %b %d %H:%M:%S %Y %z"],
         stdout=subprocess.PIPE,
         text=True
     ).stdout.strip()
     commit_msg = parts[4]
-    editor_content += f"{commit_hash} - {date} - {commit_msg}\n"
+    editor_content += f"{commit_hash[:7]} - {date} - {commit_msg}\n"
 
 # Open in default editor
 editor = os.environ.get("EDITOR", "vim")
