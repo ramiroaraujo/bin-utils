@@ -2,6 +2,7 @@
 import subprocess
 import argparse
 import os
+import datetime
 
 # Check for git repository
 try:
@@ -30,11 +31,7 @@ for entry in log_entries:
     parts = entry.split("*#")
     commit_hash = parts[0]
     timestamp = parts[3]
-    date = subprocess.run(
-        ["date", "-d", f"@{timestamp}", "+%a %b %d %H:%M:%S %Y %z"],
-        stdout=subprocess.PIPE,
-        text=True
-    ).stdout.strip()
+    date = datetime.datetime.fromtimestamp(int(timestamp)).strftime("%a %b %d %H:%M:%S %Y %z")
     commit_msg = parts[4]
     editor_content += f"{commit_hash[:7]} - {date} - {commit_msg}\n"
 
