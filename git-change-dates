@@ -86,5 +86,6 @@ filter_branch_script += "'if " + joined_conditions + " \nfi' "
 earliest_commit = log_entries[-1].split("*#")[0][:7]  # Assuming log_entries are in reverse order
 filter_branch_script += f"{earliest_commit}^..HEAD && rm -fr \"$(git rev-parse --git-dir)/refs/original/\""
 
-# Print the generated git filter-branch command
-print(filter_branch_script)
+# execute
+subprocess.run(filter_branch_script, shell=True)
+
